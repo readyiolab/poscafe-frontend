@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
-import { API_BASE_URL } from '@/services/api';
+import api from '@/services/api';
 
 type AuthContextValue = {
   user: any;
@@ -20,8 +19,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // Ideally, fetch user profile here
       const savedUser = localStorage.getItem('user');
       if (savedUser) {
         setUser(JSON.parse(savedUser));
@@ -32,14 +29,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = async (username: string, password: string) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, { username, password });
+      const response = await api.post('/auth/login', { username, password });
       const { token, user } = response.data.data;
       
       setToken(token);
       setUser(user);
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       return { success: true };
     } catch (error: any) {
       return { success: false, message: error.response?.data?.message || 'Login failed' };
@@ -51,7 +47,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    delete axios.defaults.headers.common['Authorization'];
   };
 
   return (

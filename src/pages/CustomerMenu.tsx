@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 
-import api, { LIST_ALL_PARAMS, SOCKET_ORIGIN } from '../services/api';
+import api, { API_ORIGIN, LIST_ALL_PARAMS, SOCKET_ORIGIN } from '../services/api';
 import { io } from 'socket.io-client';
 import { toast } from '@/lib/toast';
 import {
@@ -42,9 +42,6 @@ import {
 import { cn } from '@/lib/utils';
 
 const CAFE_LOGO_SRC = '/logo.png';
-
-const API_ORIGIN =
-  import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') ?? 'http://localhost:7000';
 
 function resolveMenuImageUrl(url: string | undefined | null): string | null {
   if (!url) return null;
