@@ -207,6 +207,8 @@ const MenuManagement = () => {
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [addingIngredient, setAddingIngredient] = useState(false);
   const [newIngredient, setNewIngredient] = useState({ inventory_id: '', quantity_used: '', unit: 'gm' });
+  const [editingRecipeId, setEditingRecipeId] = useState<number | null>(null);
+  const [editRecipeQty, setEditRecipeQty] = useState('');
 
   const [itemForm, setItemForm] = useState({
     name: '', description: '', price: '', category_id: '', status: 'available', image_url: '',
@@ -376,6 +378,24 @@ const MenuManagement = () => {
     }
   };
 
+  const startEditIngredient = (ing: any) => {
+    setEditingRecipeId(ing.id);
+    setEditRecipeQty(String(ing.quantity_used));
+  };
+
+  const handleSaveIngredientQty = async (id: number) => {
+    if (!editingItem || !editRecipeQty) return;
+    try {
+      await api.patch(`/recipes/${id}`, { quantity_used: parseFloat(editRecipeQty) });
+      setEditingRecipeId(null);
+      setEditRecipeQty('');
+      fetchRecipe(editingItem.id);
+      toast('Recipe quantity updated', 'success');
+    } catch {
+      toast('Could not update quantity', 'error');
+    }
+  };
+
   const handleSaveItem = async () => {
     try {
       setSaving(true);
@@ -425,7 +445,7 @@ const MenuManagement = () => {
     try {
       setSaving(true);
       if (editingCategory) {
-        await api.put(`/categories/${editingCategory.id}`, categoryForm);
+        await api.patch(`/categories/${editingCategory.id}`, categoryForm);
         toast('Category updated', 'success');
       } else {
         await api.post('/categories', categoryForm);
@@ -436,6 +456,26 @@ const MenuManagement = () => {
       goHome();
     } catch {
       toast('Failed to save category', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCategory = async (cat: any) => {
+    const count = items.filter((i) => i.category_id === cat.id).length;
+    const msg =
+      count > 0
+        ? `Delete "${cat.name}"? This will also remove ${count} menu item(s) in this category.`
+        : `Delete category "${cat.name}"?`;
+    if (!window.confirm(msg)) return;
+    try {
+      setSaving(true);
+      await api.delete(`/categories/${cat.id}`);
+      toast('Category deleted', 'info');
+      await fetchData();
+      goHome();
+    } catch {
+      toast('Could not delete category', 'error');
     } finally {
       setSaving(false);
     }
@@ -561,11 +601,31 @@ const MenuManagement = () => {
                   onClick={() => openCategory(cat)}
                 >
                   <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <div className="size-11 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-500 flex items-center justify-center border border-amber-500/10">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="size-11 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-500 flex items-center justify-center border border-amber-500/10 shrink-0">
                         <Tags className="size-5" />
                       </div>
-                      <Badge variant="secondary" className="font-bold border-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-650 dark:text-zinc-350">{count} items</Badge>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Badge variant="secondary" className="font-bold border-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-650 dark:text-zinc-350">{count} items</Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 rounded-lg text-zinc-500 hover:text-amber-600 cursor-pointer"
+                          onClick={(e) => { e.stopPropagation(); openCategoryEdit(cat); }}
+                          title="Edit category"
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }}
+                          title="Delete category"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
                     </div>
                     <CardTitle className="text-lg mt-4 font-extrabold text-zinc-900 dark:text-white truncate">{cat.name}</CardTitle>
                     {cat.description && (
@@ -573,15 +633,7 @@ const MenuManagement = () => {
                     )}
                   </CardHeader>
                   <CardContent className="pt-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-between text-xs text-zinc-450 dark:text-zinc-500 hover:text-amber-500 dark:hover:text-amber-500 cursor-pointer rounded-xl h-10 border border-zinc-100 dark:border-zinc-800/50 mt-1"
-                      onClick={(e) => { e.stopPropagation(); openCategoryEdit(cat); }}
-                    >
-                      <span>Edit Category Details</span>
-                      <Pencil className="size-3.5" />
-                    </Button>
+                    <p className="text-xs text-zinc-400 text-center">Tap to view items</p>
                   </CardContent>
                 </Card>
               );
@@ -659,7 +711,14 @@ const MenuManagement = () => {
                       {item.status === 'available' ? 'Available' : 'Sold Out'}
                     </Badge>
                   </div>
-                  <ChevronRight className="size-5 text-zinc-400 dark:text-zinc-550 shrink-0" />
+                  <div className="flex flex-col gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="icon" className="size-8 rounded-lg text-zinc-500 hover:text-amber-600 cursor-pointer" onClick={() => openItem(item)} title="Edit">
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="size-8 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer" onClick={() => handleDeleteItem(item.id)} title="Delete">
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -850,19 +909,44 @@ const MenuManagement = () => {
                 <ScrollArea className="max-h-[220px]">
                   <div className="space-y-2 pr-2">
                     {recipeIngredients.map((ing) => (
-                      <div key={ing.id} className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-200/50 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 shadow-sm">
-                        <div className="flex items-center gap-3">
-                          <Scale className="size-4 text-amber-500" />
-                          <div>
-                            <p className="font-extrabold text-sm text-zinc-850 dark:text-zinc-150">{ing.inventory_name}</p>
-                            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
-                              {ing.quantity_used} {ing.unit} · Cost: ₹{(ing.quantity_used * ing.unit_price).toFixed(2)}
-                            </p>
+                      <div key={ing.id} className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-200/50 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 shadow-sm gap-2">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <Scale className="size-4 text-amber-500 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-extrabold text-sm text-zinc-850 dark:text-zinc-150 truncate">{ing.inventory_name}</p>
+                            {editingRecipeId === ing.id ? (
+                              <div className="flex items-center gap-2 mt-1">
+                                <Input
+                                  type="number"
+                                  value={editRecipeQty}
+                                  onChange={(e) => setEditRecipeQty(e.target.value)}
+                                  className="h-8 w-24 rounded-lg text-xs"
+                                />
+                                <span className="text-xs text-zinc-500">{ing.unit}</span>
+                                <Button size="sm" className="h-8 rounded-lg bg-amber-500 text-zinc-950 font-bold border-none cursor-pointer" onClick={() => handleSaveIngredientQty(ing.id)}>
+                                  Save
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-8 rounded-lg cursor-pointer" onClick={() => setEditingRecipeId(null)}>
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
+                                {ing.quantity_used} {ing.unit} · Cost: ₹{(ing.quantity_used * ing.unit_price).toFixed(2)}
+                              </p>
+                            )}
                           </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-650 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl cursor-pointer" onClick={() => handleDeleteIngredient(ing.id)}>
-                          <Trash2 className="size-4" />
-                        </Button>
+                        {editingRecipeId !== ing.id && (
+                          <div className="flex shrink-0">
+                            <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-amber-600 rounded-xl cursor-pointer" onClick={() => startEditIngredient(ing)} title="Edit quantity">
+                              <Pencil className="size-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-650 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl cursor-pointer" onClick={() => handleDeleteIngredient(ing.id)}>
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ))}
                     {recipeIngredients.length === 0 && (
@@ -879,11 +963,21 @@ const MenuManagement = () => {
       {/* ── EDIT CATEGORY ── */}
       {view === 'category-edit' && editingCategory && (
         <>
-          <div className="flex items-center gap-3 mb-4 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl border border-zinc-200/60 dark:border-zinc-800/40 p-4 md:p-6 shadow-sm">
-            <Button variant="outline" size="icon" onClick={goHome} className="rounded-xl border-zinc-200 dark:border-zinc-800 cursor-pointer">
-              <ArrowLeft className="size-4" />
+          <div className="flex items-center justify-between gap-3 mb-4 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl border border-zinc-200/60 dark:border-zinc-800/40 p-4 md:p-6 shadow-sm">
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="icon" onClick={goHome} className="rounded-xl border-zinc-200 dark:border-zinc-800 cursor-pointer">
+                <ArrowLeft className="size-4" />
+              </Button>
+              <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">Edit Category Details</h1>
+            </div>
+            <Button
+              variant="destructive"
+              className="rounded-xl font-bold h-11 cursor-pointer"
+              onClick={() => handleDeleteCategory(editingCategory)}
+              disabled={saving}
+            >
+              <Trash2 className="size-4 mr-1.5" /> Delete Category
             </Button>
-            <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">Edit Category Details</h1>
           </div>
           <Card className="max-w-lg border border-zinc-200/60 dark:border-zinc-800/40 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl">
             <CardHeader>

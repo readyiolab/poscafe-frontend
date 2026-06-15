@@ -14,6 +14,7 @@ import {
   Coins,
   Layers,
   TrendingUp,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -176,6 +177,26 @@ const InventoryManagement = () => {
       fetchInventory();
     } catch {
       toast('Update failed', 'error');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedItem) return;
+    const usedIn = selectedItem.usage_count > 0;
+    const msg = usedIn
+      ? `Delete "${selectedItem.name}"? It is used in ${selectedItem.usage_count} recipe(s). Those recipe lines will also be removed.`
+      : `Delete ingredient "${selectedItem.name}"?`;
+    if (!window.confirm(msg)) return;
+    try {
+      setProcessing(true);
+      await api.delete(`/inventory/${selectedItem.id}`);
+      toast('Ingredient deleted', 'info');
+      closeDetail();
+      fetchInventory();
+    } catch {
+      toast('Could not delete ingredient', 'error');
     } finally {
       setProcessing(false);
     }
@@ -531,6 +552,14 @@ const InventoryManagement = () => {
                     ) : (
                       'Save Ingredient Settings'
                     )}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="w-full h-12 rounded-xl font-bold cursor-pointer"
+                    onClick={handleDelete}
+                    disabled={processing}
+                  >
+                    <Trash2 className="size-4 mr-1.5" /> Delete Ingredient
                   </Button>
                 </CardContent>
               </Card>
