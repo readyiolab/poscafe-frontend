@@ -44,6 +44,8 @@ import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { pageShell, pageHeader } from '@/lib/layout';
 
+const QUICK_TABLE_NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+
 const TablesManagement = () => {
   const [tables, setTables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,24 +153,29 @@ const TablesManagement = () => {
   };
 
   const handleSaveTable = async () => {
-    if (!formData.table_number) return;
+    const tableNumber = formData.table_number.trim();
+    if (!tableNumber) {
+      toast('Enter a table number', 'error');
+      return;
+    }
+    const payload = { ...formData, table_number: tableNumber };
     try {
       setSaving(true);
-      if (editingId && selectedTable) {
-        await api.put(`/tables/${editingId}`, formData);
+      const tableId = editingId ?? selectedTable?.id;
+      if (tableId && selectedTable) {
+        await api.put(`/tables/${tableId}`, payload);
         toast('Table updated', 'success');
       } else {
-        await api.post('/tables', formData);
+        await api.post('/tables', payload);
         toast('Table created', 'success');
         setShowAddDialog(false);
       }
       fetchTables();
       if (selectedTable) {
-        const updated = { ...selectedTable, ...formData };
-        setSelectedTable(updated);
+        setSelectedTable({ ...selectedTable, ...payload });
       }
-    } catch {
-      toast('Save failed', 'error');
+    } catch (err: any) {
+      toast(err.response?.data?.message || 'Save failed', 'error');
     } finally {
       setSaving(false);
     }
@@ -438,11 +445,29 @@ const TablesManagement = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Table Name / ID</Label>
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Table number</Label>
+                    <p className="text-[10px] text-zinc-400">Tap a number below or type any label (e.g. 5, T-02, Outdoor)</p>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                      {QUICK_TABLE_NUMBERS.map((n) => (
+                        <Button
+                          key={n}
+                          type="button"
+                          variant={formData.table_number === n ? 'default' : 'outline'}
+                          onClick={() => setFormData({ ...formData, table_number: n })}
+                          className={cn(
+                            'h-11 rounded-xl font-bold cursor-pointer',
+                            formData.table_number === n && 'bg-amber-500 text-zinc-950 hover:bg-amber-400 border-none'
+                          )}
+                        >
+                          {n}
+                        </Button>
+                      ))}
+                    </div>
                     <Input
+                      placeholder="Or type custom: Mirror, T-05, Patio 3…"
                       value={formData.table_number}
                       onChange={(e) => setFormData({ ...formData, table_number: e.target.value })}
-                      className="h-11 rounded-xl"
+                      className="h-11 rounded-xl mt-1"
                     />
                   </div>
                   <div className="space-y-2">
@@ -488,9 +513,25 @@ const TablesManagement = () => {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-zinc-550">Table number / identifier</Label>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-zinc-550">Table number</Label>
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                {QUICK_TABLE_NUMBERS.map((n) => (
+                  <Button
+                    key={n}
+                    type="button"
+                    variant={formData.table_number === n ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, table_number: n })}
+                    className={cn(
+                      'h-11 rounded-xl font-bold cursor-pointer',
+                      formData.table_number === n && 'bg-amber-500 text-zinc-950 hover:bg-amber-400 border-none'
+                    )}
+                  >
+                    {n}
+                  </Button>
+                ))}
+              </div>
               <Input
-                placeholder="e.g. 10, T-05, Outdoor 2"
+                placeholder="Or type custom name / number"
                 value={formData.table_number}
                 onChange={(e) => setFormData({ ...formData, table_number: e.target.value })}
                 className="h-11 rounded-xl"
