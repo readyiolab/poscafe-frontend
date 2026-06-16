@@ -364,6 +364,16 @@ const CustomerMenu = () => {
       localStorage.setItem('customer_phone', phone);
       setCustomerPhone(phone);
       await fetchProfile(phone);
+
+      if (tableDetails?.id) {
+        try {
+          await api.post(`/tables/${tableDetails.id}/occupy`);
+          setTableDetails((prev) => (prev ? { ...prev, status: 'occupied' } : prev));
+        } catch {
+          /* table may already be occupied */
+        }
+      }
+
       toast('Welcome to House Cafe!', 'success');
     } catch (err: any) {
       console.error('Failed to save phone', err);
@@ -451,18 +461,23 @@ const CustomerMenu = () => {
     socket.emit('join_table', tableDetails.id);
 
     socket.on('table_status_updated', (data) => {
-      if (data && Number(data.table_id) === Number(tableDetails.id) && data.status === 'available') {
-        localStorage.removeItem('customer_phone');
-        localStorage.removeItem('customer_session_orders');
-        clearCart();
-        setCustomerPhone('');
-        setPhoneInput('');
-        setOrderSuccess(false);
-        setSessionOrders([]);
-        setOrderStatusFlash({});
-        setProfile(null);
-        setBillStatus(null);
-        toast('Your session has ended. Thank you! 🙏', 'info');
+      if (data && Number(data.table_id) === Number(tableDetails.id)) {
+        if (data.status) {
+          setTableDetails((prev) => (prev ? { ...prev, status: data.status } : prev));
+        }
+        if (data.status === 'available') {
+          localStorage.removeItem('customer_phone');
+          localStorage.removeItem('customer_session_orders');
+          clearCart();
+          setCustomerPhone('');
+          setPhoneInput('');
+          setOrderSuccess(false);
+          setSessionOrders([]);
+          setOrderStatusFlash({});
+          setProfile(null);
+          setBillStatus(null);
+          toast('Your session has ended. Thank you! 🙏', 'info');
+        }
       }
     });
 
@@ -678,6 +693,14 @@ const CustomerMenu = () => {
     [sessionOrders]
   );
 
+  const tableBusy = tableDetails?.status === 'occupied';
+  const tableStatusChip =
+    tableBusy
+      ? { label: 'Busy', className: 'bg-orange-100 text-orange-800 border-orange-200' }
+      : tableDetails?.status === 'reserved'
+        ? { label: 'Reserved', className: 'bg-violet-100 text-violet-800 border-violet-200' }
+        : { label: 'Free', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+
   const tabTitle: Record<CustomerTab, string> = {
     menu: 'What would you like today? 🍔',
     orders: 'Track your order',
@@ -746,8 +769,18 @@ const CustomerMenu = () => {
           <CafeLogoMark size="lg" className="mx-auto shadow-lg ring-white/50" />
           <div className="space-y-2">
             <h2 className="text-2xl font-bold tracking-tight text-stone-900">Welcome to House Cafe</h2>
+            {tableDetails?.table_number != null && (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Badge variant="outline" className="rounded-full px-3 py-1 text-xs font-bold border-amber-200 bg-amber-50 text-amber-900">
+                  Table {tableDetails.table_number}
+                </Badge>
+                <Badge variant="outline" className={cn('rounded-full px-3 py-1 text-xs font-bold border', tableStatusChip.className)}>
+                  {tableStatusChip.label}
+                </Badge>
+              </div>
+            )}
             <p className="text-stone-600 text-sm leading-relaxed">
-              Please enter your mobile number to view the menu.
+              Enter your mobile number to order. Staff will see this table as <strong>Busy</strong> after you continue.
             </p>
           </div>
         </div>
@@ -823,8 +856,12 @@ const CustomerMenu = () => {
               <div className="flex min-w-0 items-start gap-3">
                 <CafeLogoMark size="sm" className="shadow-md" aria-hidden />
                 <div className="min-w-0 pt-0.5">
-                  <p className="mb-0.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-800/90">
-                    Table {tableDetails?.table_number || '...'} • Welcome! 🙏
+                  <p className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-800/90">
+                    <span>Table {tableDetails?.table_number || '...'}</span>
+                    <Badge variant="outline" className={cn('h-5 px-2 text-[9px] font-black border', tableStatusChip.className)}>
+                      {tableStatusChip.label}
+                    </Badge>
+                    <span>• Welcome! 🙏</span>
                   </p>
                   <h1 className="text-lg font-bold tracking-tight text-stone-950 leading-snug">
                     {tabTitle[customerTab]}
