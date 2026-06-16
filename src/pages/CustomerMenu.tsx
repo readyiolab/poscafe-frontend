@@ -48,6 +48,62 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from '@/lib/utils';
 
+const CUSTOMER_SESSION_KEY = 'cafe_customer_table_session';
+
+type CustomerTableSession = {
+  tableToken: string;
+  tableId?: number;
+  phone: string;
+};
+
+function readCustomerSession(tableToken: string | null): CustomerTableSession | null {
+  if (!tableToken) return null;
+  try {
+    const raw = localStorage.getItem(CUSTOMER_SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw) as CustomerTableSession;
+    if (session.tableToken === tableToken && session.phone) return session;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function writeCustomerSession(session: CustomerTableSession) {
+  localStorage.setItem(CUSTOMER_SESSION_KEY, JSON.stringify(session));
+  localStorage.removeItem('customer_phone');
+}
+
+function clearCustomerSession() {
+  localStorage.removeItem(CUSTOMER_SESSION_KEY);
+  localStorage.removeItem('customer_phone');
+}
+
+function sessionOrdersKey(tableId: number) {
+  return `customer_session_orders_${tableId}`;
+}
+
+function readSessionOrders(tableId: number | undefined) {
+  if (!tableId) return [];
+  try {
+    const raw = sessionStorage.getItem(sessionOrdersKey(tableId));
+    if (!raw) return [];
+    const orders = JSON.parse(raw);
+    return Array.isArray(orders) ? orders.filter((o) => Number(o.table_id) === Number(tableId)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSessionOrders(tableId: number, orders: unknown[]) {
+  sessionStorage.setItem(sessionOrdersKey(tableId), JSON.stringify(orders));
+}
+
+function clearSessionOrders(tableId: number) {
+  sessionStorage.removeItem(sessionOrdersKey(tableId));
+  sessionStorage.removeItem('customer_session_orders');
+}
+
 const CAFE_LOGO_SRC = '/logo.png';
 
 function resolveMenuImageUrl(url: string | undefined | null): string | null {
@@ -264,7 +320,7 @@ const CustomerMenu = () => {
   const [offers, setOffers] = useState([]);
   const [tableDetails, setTableDetails] = useState<any>(null);
   const [tableError, setTableError] = useState('');
-  const [customerPhone, setCustomerPhone] = useState(localStorage.getItem('customer_phone') || '');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const [savingPhone, setSavingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState('');
@@ -348,6 +404,24 @@ const CustomerMenu = () => {
     }, 0);
   }, [pricedCartItems]);
 
+  // Phone is scoped per table QR — new scan always shows number entry (not old browser storage)
+  useEffect(() => {
+    if (!tableToken) {
+      setCustomerPhone('');
+      setPhoneInput('');
+      return;
+    }
+    const session = readCustomerSession(tableToken);
+    if (session?.phone) {
+      setCustomerPhone(session.phone);
+      setPhoneInput(session.phone);
+    } else {
+      setCustomerPhone('');
+      setPhoneInput('');
+      clearCustomerSession();
+    }
+  }, [tableToken]);
+
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const phone = phoneInput.trim();
@@ -361,7 +435,13 @@ const CustomerMenu = () => {
       setPhoneError('');
       // Save customer phone in backend
       await api.post('/customers', { phone });
-      localStorage.setItem('customer_phone', phone);
+      if (tableToken) {
+        writeCustomerSession({
+          tableToken,
+          phone,
+          tableId: tableDetails?.id,
+        });
+      }
       setCustomerPhone(phone);
       await fetchProfile(phone);
 
@@ -466,8 +546,8 @@ const CustomerMenu = () => {
           setTableDetails((prev) => (prev ? { ...prev, status: data.status } : prev));
         }
         if (data.status === 'available') {
-          localStorage.removeItem('customer_phone');
-          localStorage.removeItem('customer_session_orders');
+          clearCustomerSession();
+          if (tableDetails?.id) clearSessionOrders(tableDetails.id);
           clearCart();
           setCustomerPhone('');
           setPhoneInput('');
@@ -505,7 +585,7 @@ const CustomerMenu = () => {
               ready_at: order.ready_at,
               completed_at: order.completed_at,
             }];
-        sessionStorage.setItem('customer_session_orders', JSON.stringify(next));
+        if (tableDetails?.id) writeSessionOrders(tableDetails.id, next);
         return next;
       });
       notifyOrderStatus(order, previousStatus);
@@ -541,12 +621,7 @@ const CustomerMenu = () => {
       if (customerPhone) fetchProfile(customerPhone);
     });
 
-    const stored = sessionStorage.getItem('customer_session_orders');
-    if (stored) {
-      try {
-        setSessionOrders(JSON.parse(stored));
-      } catch { /* ignore */ }
-    }
+    setSessionOrders(readSessionOrders(tableDetails.id));
 
     return () => {
       socket.disconnect();
@@ -583,7 +658,7 @@ const CustomerMenu = () => {
             ready_at: newOrder.ready_at,
             completed_at: newOrder.completed_at,
           }];
-          sessionStorage.setItem('customer_session_orders', JSON.stringify(next));
+          if (tableDetails.id) writeSessionOrders(tableDetails.id, next);
           return next;
         });
         setOrderStatusFlash((prev) => ({ ...prev, [newOrder.id]: Date.now() }));
