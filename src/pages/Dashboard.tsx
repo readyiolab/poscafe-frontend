@@ -23,6 +23,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { io } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { pageShell, pageHeader, statGrid } from '@/lib/layout';
+import { ServiceRequestsBar } from '@/components/ServiceRequestsBar';
 import {
   Dialog,
   DialogContent,
@@ -261,9 +263,10 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto pb-8">
+    <div className={pageShell}>
+      <ServiceRequestsBar />
       {/* Welcome header */}
-      <div className="bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl border border-zinc-200/60 dark:border-zinc-800/40 p-5 md:p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className={pageHeader}>
         <div className="flex items-center gap-4">
           <div className="size-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-zinc-950 shadow-md">
             <Utensils className="size-7" />
@@ -304,7 +307,7 @@ const Dashboard = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+      <div className={statGrid}>
         <StatCard
           label="Today's Sales"
           hint="Total daily revenue"
@@ -335,7 +338,7 @@ const Dashboard = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 min-w-0">
         {/* Recent orders */}
         <Card className="lg:col-span-2 border border-zinc-200/60 dark:border-zinc-800/40 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-5 border-b border-zinc-200/60 dark:border-zinc-800/60">

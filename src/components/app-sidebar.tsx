@@ -10,6 +10,7 @@ import {
   Users,
   Monitor,
   ChefHat,
+  Gift,
   LayoutGrid,
 } from "lucide-react"
 
@@ -21,6 +22,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { Link, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
@@ -39,6 +41,7 @@ const navItems: NavItem[] = [
   { title: "Menu", url: "/menu-management", icon: MenuIcon, roles: ["admin", "manager"] },
   { title: "Stock", url: "/inventory", icon: Package, roles: ["admin", "manager"] },
   { title: "Offers", url: "/offers", icon: Zap, roles: ["admin", "manager"] },
+  { title: "Loyalty", url: "/loyalty", icon: Gift, roles: ["admin", "manager"] },
   { title: "Tables", url: "/tables", icon: LayoutGrid, roles: ["admin", "manager"] },
   { title: "Sales", url: "/transactions", icon: Receipt, roles: ["admin", "manager"] },
   { title: "Staff", url: "/users", icon: Users, roles: ["admin"] },
@@ -57,8 +60,13 @@ function getUserRole(): string {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
+  const { setOpenMobile } = useSidebar()
   const role = getUserRole()
   const visibleItems = navItems.filter((item) => item.roles.includes(role))
+
+  const closeMobileSidebar = () => {
+    setOpenMobile(false)
+  }
 
   return (
     <Sidebar collapsible="icon" className="border-r bg-sidebar/50 backdrop-blur-xl" {...props}>
@@ -88,7 +96,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     : "hover:bg-amber-500/10 dark:hover:bg-zinc-850/50 text-muted-foreground hover:text-foreground dark:hover:text-zinc-200"
                 )}
               >
-                <Link to={item.url} className="flex items-center gap-3">
+                <Link to={item.url} onClick={closeMobileSidebar} className="flex items-center gap-3">
                   <item.icon className="size-5" />
                   <span className="font-semibold text-sm">{item.title}</span>
                 </Link>

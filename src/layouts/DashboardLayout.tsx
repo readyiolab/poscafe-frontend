@@ -58,6 +58,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/menu-management': 'Menu',
   '/inventory': 'Stock',
   '/offers': 'Offers',
+  '/loyalty': 'Loyalty',
   '/tables': 'Tables',
   '/kitchen': 'Kitchen',
   '/transactions': 'Sales',
@@ -106,10 +107,10 @@ const DashboardLayout = () => {
     <SidebarProvider>
       <div className="flex h-screen w-full overflow-hidden bg-background font-sans antialiased">
         <AppSidebar />
-        <SidebarInset className="flex flex-col overflow-hidden">
+        <SidebarInset className="flex flex-col overflow-hidden min-w-0">
           <header
             className={cn(
-              'flex h-14 shrink-0 items-center justify-between border-b px-4 bg-background/95 backdrop-blur-xl sticky top-0 z-20',
+              'flex h-14 shrink-0 items-center justify-between border-b px-3 sm:px-4 md:px-5 bg-background/95 backdrop-blur-xl sticky top-0 z-20 min-w-0',
               isPOS && 'md:h-12'
             )}
           >
@@ -177,7 +178,7 @@ const DashboardLayout = () => {
 
           <main
             className={cn(
-              'flex-1 overflow-y-auto',
+              'flex-1 overflow-y-auto overflow-x-hidden min-w-0',
               isPOS
                 ? 'bg-zinc-50 dark:bg-zinc-950 p-0'
                 : 'bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-50/20 via-background to-background'
@@ -185,8 +186,8 @@ const DashboardLayout = () => {
           >
             <div
               className={cn(
-                'mx-auto w-full animate-in fade-in duration-300',
-                isPOS ? 'max-w-none h-full' : 'max-w-[1800px] p-4 sm:p-5 md:p-6 lg:p-8'
+                'mx-auto w-full min-w-0 animate-in fade-in duration-300',
+                isPOS ? 'max-w-none h-full' : 'max-w-[1800px] p-3 sm:p-4 md:p-5 lg:p-8'
               )}
             >
               <Suspense fallback={<PageLoader />}>

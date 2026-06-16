@@ -56,6 +56,7 @@ import {
 import api, { API_ORIGIN, SOCKET_ORIGIN, LIST_ALL_PARAMS } from '../services/api';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { pageShell, pageHeader, cardGrid } from '@/lib/layout';
 
 type View = 'categories' | 'items' | 'item-edit' | 'category-edit';
 
@@ -211,7 +212,7 @@ const MenuManagement = () => {
   const [editRecipeQty, setEditRecipeQty] = useState('');
 
   const [itemForm, setItemForm] = useState({
-    name: '', description: '', price: '', category_id: '', status: 'available', image_url: '',
+    name: '', description: '', price: '', category_id: '', status: 'available', image_url: '', calories: '',
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState('');
@@ -289,6 +290,7 @@ const MenuManagement = () => {
       category_id: String(item.category_id),
       status: item.status || 'available',
       image_url: item.image_url || '',
+      calories: item.calories != null ? String(item.calories) : '',
     });
     setImagePreview(resolveImage(item.image_url) || '');
     setView('item-edit');
@@ -490,6 +492,7 @@ const MenuManagement = () => {
       category_id: selectedCategory ? String(selectedCategory.id) : '',
       status: 'available',
       image_url: '',
+      calories: '',
     });
     setImagePreview('');
     setImageFile(null);
@@ -519,7 +522,7 @@ const MenuManagement = () => {
   const margin = price > 0 ? (profit / price) * 100 : 0;
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto pb-8">
+    <div className={pageShell}>
       {/* Breadcrumb */}
       <div className="bg-white/50 dark:bg-zinc-900/30 px-4 py-2.5 rounded-xl border border-zinc-200/40 dark:border-zinc-800/30 backdrop-blur-sm">
         <Breadcrumb>
@@ -591,7 +594,7 @@ const MenuManagement = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={cardGrid}>
             {filteredCategories.map((cat) => {
               const count = items.filter((i) => i.category_id === cat.id).length;
               return (
@@ -755,7 +758,7 @@ const MenuManagement = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 min-w-0">
             <Card className="border border-zinc-200/60 dark:border-zinc-800/40 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl">
               <CardHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-4">
                 <CardTitle className="text-lg font-bold">Item Specifications</CardTitle>
@@ -813,6 +816,11 @@ const MenuManagement = () => {
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Description</Label>
                   <Textarea value={itemForm.description} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })} rows={3} className="rounded-xl" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Calories (kcal)</Label>
+                  <Input type="number" min={0} value={itemForm.calories} onChange={(e) => setItemForm({ ...itemForm, calories: e.target.value })} placeholder="Optional" className="h-11 rounded-xl" />
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">
@@ -1057,6 +1065,10 @@ const MenuManagement = () => {
             <div className="space-y-2">
               <Label className="text-xs font-semibold uppercase tracking-wide text-zinc-550">Description</Label>
               <Textarea value={itemForm.description} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })} placeholder="Describe ingredients or taste..." className="rounded-xl" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-zinc-550">Calories (kcal)</Label>
+              <Input type="number" min={0} value={itemForm.calories} onChange={(e) => setItemForm({ ...itemForm, calories: e.target.value })} placeholder="Optional" className="h-11 rounded-xl" />
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0 mt-4 border-t pt-4 border-zinc-200/20 dark:border-zinc-800/20">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import {
   Search,
@@ -48,6 +48,7 @@ import api, { SOCKET_ORIGIN, LIST_ALL_PARAMS } from '../services/api';
 import { INVENTORY_UNITS } from '@/lib/constants';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { pageShell, pageHeader, cardGrid } from '@/lib/layout';
 
 const InventoryManagement = () => {
   const [inventory, setInventory] = useState<any[]>([]);
@@ -60,9 +61,73 @@ const InventoryManagement = () => {
   const [activeTab, setActiveTab] = useState('refill');
   const [showAddDialog, setShowAddDialog] = useState(false);
 
-  const [newItem, setNewItem] = useState({ name: '', unit: 'gm', current_stock: '', unit_price: '' });
+  const [newItem, setNewItem] = useState({ name: '', unit: 'kg', current_stock: '', unit_price: '' });
+  const [addTotalPaid, setAddTotalPaid] = useState('');
   const [refillQty, setRefillQty] = useState('');
   const [totalPaid, setTotalPaid] = useState('');
+
+  const resetAddForm = () => {
+    setNewItem({ name: '', unit: 'kg', current_stock: '', unit_price: '' });
+    setAddTotalPaid('');
+  };
+
+  const addPreview = useMemo(() => {
+    const qty = parseFloat(newItem.current_stock);
+    const rate = parseFloat(newItem.unit_price);
+    const total = parseFloat(addTotalPaid);
+    if (!qty || qty <= 0) return null;
+    const effectiveRate = rate > 0 ? rate : total > 0 ? total / qty : 0;
+    const effectiveTotal = total > 0 ? total : rate > 0 ? qty * rate : 0;
+    if (effectiveRate <= 0 || effectiveTotal <= 0) return null;
+    return {
+      qty,
+      rate: effectiveRate,
+      total: effectiveTotal,
+      unit: newItem.unit,
+    };
+  }, [newItem.current_stock, newItem.unit_price, newItem.unit, addTotalPaid]);
+
+  const handleAddStockQtyChange = (value: string) => {
+    const qty = parseFloat(value);
+    const rate = parseFloat(newItem.unit_price);
+    const total = parseFloat(addTotalPaid);
+
+    if (qty > 0 && rate > 0) {
+      setAddTotalPaid(String(Number((qty * rate).toFixed(2))));
+      setNewItem((prev) => ({ ...prev, current_stock: value }));
+      return;
+    }
+    if (qty > 0 && total > 0) {
+      setNewItem((prev) => ({
+        ...prev,
+        current_stock: value,
+        unit_price: String(Number((total / qty).toFixed(4))),
+      }));
+      return;
+    }
+    setNewItem((prev) => ({ ...prev, current_stock: value }));
+  };
+
+  const handleAddRateChange = (value: string) => {
+    const qty = parseFloat(newItem.current_stock);
+    const rate = parseFloat(value);
+    setNewItem((prev) => ({ ...prev, unit_price: value }));
+    if (qty > 0 && rate > 0) {
+      setAddTotalPaid(String(Number((qty * rate).toFixed(2))));
+    }
+  };
+
+  const handleAddTotalPaidChange = (value: string) => {
+    const qty = parseFloat(newItem.current_stock);
+    const total = parseFloat(value);
+    setAddTotalPaid(value);
+    if (qty > 0 && total > 0) {
+      setNewItem((prev) => ({
+        ...prev,
+        unit_price: String(Number((total / qty).toFixed(4))),
+      }));
+    }
+  };
 
   const fetchInventory = async () => {
     try {
@@ -127,7 +192,7 @@ const InventoryManagement = () => {
         unit_price: Number(newItem.unit_price || 0),
       });
       setShowAddDialog(false);
-      setNewItem({ name: '', unit: 'gm', current_stock: '', unit_price: '' });
+      resetAddForm();
       fetchInventory();
       toast('Ingredient added', 'success');
     } catch {
@@ -223,11 +288,11 @@ const InventoryManagement = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto pb-12 px-4 sm:px-6">
+    <div className={pageShell}>
       {!selectedItem ? (
         <>
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/80 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl border border-zinc-200/50 dark:border-zinc-800/40 p-6 shadow-sm">
+          <div className={pageHeader}>
             <div>
               <h1 className="text-2xl sm:text-3xl font-black text-zinc-900 dark:text-white leading-tight">Stock & Inventory</h1>
               <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest font-black mt-1.5 flex items-center flex-wrap gap-2">
@@ -243,15 +308,15 @@ const InventoryManagement = () => {
               </p>
             </div>
             <Button 
-              onClick={() => { setNewItem({ name: '', unit: 'gm', current_stock: '', unit_price: '' }); setShowAddDialog(true); }} 
+              onClick={() => { resetAddForm(); setShowAddDialog(true); }} 
               className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 border-none rounded-xl h-11 cursor-pointer font-extrabold text-sm shadow-md transition active:scale-[0.98] shrink-0"
             >
               <Plus className="size-4 mr-2 stroke-[3]" /> Add Ingredient
             </Button>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Stats Grid — 2 cols phone, 3 cols tablet+ */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 min-w-0">
             <Card className="border border-zinc-200/50 dark:border-zinc-800/40 bg-white/80 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm hover:shadow-md transition">
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1">
@@ -286,11 +351,11 @@ const InventoryManagement = () => {
               </CardContent>
             </Card>
 
-            <Card className="border border-zinc-200/50 dark:border-zinc-800/40 bg-white/80 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm hover:shadow-md transition">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div className="space-y-1">
+            <Card className="col-span-2 md:col-span-1 border border-zinc-200/50 dark:border-zinc-800/40 bg-white/80 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm hover:shadow-md transition">
+              <CardContent className="p-4 md:p-5 flex items-center justify-between gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-black uppercase tracking-wider">Inventory Value</p>
-                  <p className="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">
+                  <p className="text-2xl md:text-3xl font-black text-zinc-900 dark:text-white tracking-tight truncate">
                     ₹{inventory.reduce((a, c) => a + parseFloat(c.current_stock) * parseFloat(c.unit_price || 0), 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                   </p>
                 </div>
@@ -313,7 +378,7 @@ const InventoryManagement = () => {
           </div>
 
           {/* Ingredient cards list */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={cardGrid}>
             {filtered.map((item) => {
               const stockVal = parseFloat(item.current_stock);
               const low = stockVal < 10;
@@ -370,9 +435,14 @@ const InventoryManagement = () => {
                       </div>
                     </div>
 
-                    <div className="text-[10px] text-zinc-550 dark:text-zinc-500 mt-4 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800/60 pt-3">
-                      <span className="font-semibold">Avg Cost: ₹{parseFloat(item.unit_price || 0).toFixed(2)} / {item.unit}</span>
-                      <ChevronRight className="size-4 text-zinc-400" />
+                    <div className="text-[10px] text-zinc-550 dark:text-zinc-500 mt-4 flex flex-col gap-1 border-t border-zinc-100 dark:border-zinc-800/60 pt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold">Rate: ₹{parseFloat(item.unit_price || 0).toFixed(2)} / {item.unit}</span>
+                        <ChevronRight className="size-4 text-zinc-400" />
+                      </div>
+                      <span className="font-black text-emerald-600 dark:text-emerald-500">
+                        Stock value: ₹{(stockVal * parseFloat(item.unit_price || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </span>
                     </div>
                   </CardContent>
                 </Card>
@@ -425,36 +495,40 @@ const InventoryManagement = () => {
                   <CardDescription className="text-xs">Enter quantity purchased and total amount paid</CardDescription>
                 </CardHeader>
                 <CardContent className="p-6 pt-0 space-y-5">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Quantity added ({selectedItem.unit})</Label>
-                    <Input
-                      type="number"
-                      placeholder={`e.g. ${selectedItem.unit === 'gm' ? '1000' : '10'}`}
-                      className="h-12 text-base rounded-xl border-zinc-200 dark:border-zinc-800"
-                      value={refillQty}
-                      onChange={(e) => setRefillQty(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Total amount paid (₹)</Label>
-                    <Input
-                      type="number"
-                      placeholder="e.g. 500"
-                      className="h-12 text-base rounded-xl border-zinc-200 dark:border-zinc-800"
-                      value={totalPaid}
-                      onChange={(e) => setTotalPaid(e.target.value)}
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Quantity added ({selectedItem.unit})</Label>
+                      <Input
+                        type="number"
+                        placeholder={`e.g. ${selectedItem.unit === 'gm' ? '1000' : '10'}`}
+                        className="h-12 text-base rounded-xl border-zinc-200 dark:border-zinc-800"
+                        value={refillQty}
+                        onChange={(e) => setRefillQty(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Total amount paid (₹)</Label>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 500"
+                        className="h-12 text-base rounded-xl border-zinc-200 dark:border-zinc-800"
+                        value={totalPaid}
+                        onChange={(e) => setTotalPaid(e.target.value)}
+                      />
+                    </div>
                   </div>
                   
                   {refillQty && totalPaid && (
-                    <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/20 p-5 space-y-2.5 font-mono text-xs shadow-inner">
-                      <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
-                        <span>Calculated Unit Price:</span>
-                        <span className="font-extrabold text-sm">₹{(parseFloat(totalPaid) / parseFloat(refillQty)).toFixed(2)} / {selectedItem.unit}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-500 border-t border-emerald-500/10 pt-2.5">
-                        <span>Projected Stock Level:</span>
-                        <span className="font-extrabold">{(parseFloat(selectedItem.current_stock) + parseFloat(refillQty)).toFixed(2)} {selectedItem.unit}</span>
+                    <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/20 p-5 space-y-3 font-mono text-xs shadow-inner">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400 rounded-xl bg-white/50 dark:bg-zinc-950/30 p-3 border border-emerald-500/10">
+                          <span>Unit price:</span>
+                          <span className="font-extrabold text-sm">₹{(parseFloat(totalPaid) / parseFloat(refillQty)).toFixed(2)} / {selectedItem.unit}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-500 rounded-xl bg-white/50 dark:bg-zinc-950/30 p-3 border border-emerald-500/10">
+                          <span>New stock level:</span>
+                          <span className="font-extrabold">{(parseFloat(selectedItem.current_stock) + parseFloat(refillQty)).toFixed(2)} {selectedItem.unit}</span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -569,8 +643,14 @@ const InventoryManagement = () => {
       )}
 
       {/* Add Ingredient Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-md rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/40 text-zinc-900 dark:text-zinc-100">
+      <Dialog
+        open={showAddDialog}
+        onOpenChange={(open) => {
+          setShowAddDialog(open);
+          if (!open) resetAddForm();
+        }}
+      >
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg md:max-w-2xl rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/40 text-zinc-900 dark:text-zinc-100 max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-500">
@@ -578,32 +658,34 @@ const InventoryManagement = () => {
               </span>
               <span>Add New Item</span>
             </DialogTitle>
-            <DialogDescription className="text-xs text-zinc-500">
-              Fill these 4 easy details to add a new item to your stock list.
+            <DialogDescription className="text-xs text-zinc-500 leading-relaxed">
+              Enter what you bought and how much you paid. Total value updates live — same as the Restock screen.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2 text-left">
-            {/* Step 1: Ingredient name */}
-            <div className="space-y-1.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2 text-left min-w-0">
+            {/* 1. Item name — full width */}
+            <div className="space-y-1.5 md:col-span-2">
               <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                1. Item Name
+                1. Item name
               </Label>
               <Input
-                placeholder="e.g. Milk, Sugar, Coffee beans, Bread..."
+                placeholder="e.g. Milk, Sugar, Coffee beans..."
                 value={newItem.name}
                 onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                className="h-11 rounded-xl focus-visible:ring-amber-500/20 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800"
+                className="h-11 md:h-12 rounded-xl focus-visible:ring-amber-500/20 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800"
               />
-              <p className="text-[10px] text-zinc-400 ml-0.5">Enter the name of the ingredient</p>
             </div>
 
-            {/* Step 2: How is it measured */}
+            {/* 2. Unit */}
             <div className="space-y-1.5">
               <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                2. Measurement Unit
+                2. Measured in
               </Label>
-              <Select value={newItem.unit} onValueChange={(v) => setNewItem({ ...newItem, unit: v })}>
-                <SelectTrigger className="h-11 rounded-xl text-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-905">
+              <Select
+                value={newItem.unit}
+                onValueChange={(v) => setNewItem({ ...newItem, unit: v })}
+              >
+                <SelectTrigger className="h-11 md:h-12 rounded-xl text-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-905 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
@@ -612,60 +694,105 @@ const InventoryManagement = () => {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-zinc-400 ml-0.5">Select how this item is counted (Weight, Volume, Packets etc.)</p>
+              <p className="text-[10px] text-zinc-400 ml-0.5">kg, ltr, pcs…</p>
             </div>
 
-            <Separator className="my-2 opacity-50" />
+            {/* 3. Stock quantity */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                3. Stock quantity
+              </Label>
+              <div className="relative flex items-center">
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="e.g. 50"
+                  value={newItem.current_stock}
+                  onChange={(e) => handleAddStockQtyChange(e.target.value)}
+                  className="h-11 md:h-12 rounded-xl pr-14 focus-visible:ring-amber-500/20 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 w-full"
+                />
+                <div className="absolute right-3 text-xs font-black text-amber-600 dark:text-amber-500 uppercase tracking-wide">
+                  {newItem.unit}
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-400 leading-tight">How much you have now</p>
+            </div>
 
-            {/* Step 3 & 4: Initial Stock & Cost Price */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  3. Starting Stock Quantity
-                </Label>
-                <div className="relative flex items-center">
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={newItem.current_stock}
-                    onChange={(e) => setNewItem({ ...newItem, current_stock: e.target.value })}
-                    className="h-11 rounded-xl pr-12 focus-visible:ring-amber-500/20 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800"
-                  />
-                  <div className="absolute right-3 text-xs font-black text-amber-600 dark:text-amber-500 uppercase tracking-wide">
-                    {newItem.unit || 'units'}
+            {/* 4a. Total bill */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                4a. Total bill paid (₹)
+              </Label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 text-xs font-bold text-zinc-400">₹</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="e.g. 2500"
+                  value={addTotalPaid}
+                  onChange={(e) => handleAddTotalPaidChange(e.target.value)}
+                  className="h-11 md:h-12 rounded-xl pl-7 focus-visible:ring-amber-500/20 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 w-full"
+                />
+              </div>
+              <p className="text-[10px] text-zinc-400 leading-tight">
+                Paid for all {newItem.current_stock || '…'} {newItem.unit}
+              </p>
+            </div>
+
+            {/* 4b. Rate per unit */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                4b. Rate per {newItem.unit}
+              </Label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 text-xs font-bold text-zinc-400">₹</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="e.g. 50"
+                  value={newItem.unit_price}
+                  onChange={(e) => handleAddRateChange(e.target.value)}
+                  className="h-11 md:h-12 rounded-xl pl-7 focus-visible:ring-amber-500/20 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 w-full"
+                />
+              </div>
+              <p className="text-[10px] text-zinc-400 leading-tight">
+                Per 1 {newItem.unit} — syncs with total
+              </p>
+            </div>
+
+            {/* Live preview — full width */}
+            {addPreview && (
+              <div className="md:col-span-2 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 p-4 md:p-5 shadow-inner min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-3">
+                  Live summary
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
+                  <div className="rounded-xl bg-white/60 dark:bg-zinc-950/40 border border-emerald-500/15 p-3 flex justify-between items-center text-emerald-700 dark:text-emerald-400">
+                    <span>Rate / {addPreview.unit}</span>
+                    <span className="font-extrabold text-sm">₹{addPreview.rate.toFixed(2)}</span>
+                  </div>
+                  <div className="rounded-xl bg-white/60 dark:bg-zinc-950/40 border border-emerald-500/15 p-3 flex justify-between items-center text-emerald-800 dark:text-emerald-300">
+                    <span className="font-bold">Total value</span>
+                    <span className="font-black text-base">₹{addPreview.total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
-                <p className="text-[10px] text-zinc-400 leading-tight">
-                  How much do you have in stock right now?
+                <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 font-sans mt-3 text-center md:text-left">
+                  {addPreview.qty} {addPreview.unit} × ₹{addPreview.rate.toFixed(2)} = ₹{addPreview.total.toLocaleString('en-IN')}
                 </p>
               </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  4. Buying Price per Unit (₹)
-                </Label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-xs font-bold text-zinc-400">₹</span>
-                  <Input
-                    type="number"
-                    placeholder="e.g. 50"
-                    value={newItem.unit_price}
-                    onChange={(e) => setNewItem({ ...newItem, unit_price: e.target.value })}
-                    className="h-11 rounded-xl pl-7 focus-visible:ring-amber-500/20 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800"
-                  />
-                </div>
-                <p className="text-[10px] text-zinc-400 leading-tight">
-                  Buying price for 1 {newItem.unit || 'unit'}
-                </p>
-              </div>
-            </div>
+            )}
           </div>
-          <DialogFooter className="gap-2 sm:gap-0 mt-4 border-t pt-4 border-zinc-200/20 dark:border-zinc-800/20">
-            <Button variant="outline" onClick={() => setShowAddDialog(false)} className="rounded-xl h-11 cursor-pointer">Cancel</Button>
-            <Button 
-              onClick={handleAddIngredient} 
-              disabled={processing || !newItem.name || !newItem.current_stock} 
-              className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black border-none rounded-xl h-11 cursor-pointer shadow-md transition active:scale-[0.98]"
+          <DialogFooter className="gap-2 sm:gap-3 mt-4 border-t pt-4 border-zinc-200/20 dark:border-zinc-800/20 flex-col-reverse sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={() => setShowAddDialog(false)} className="rounded-xl h-11 md:h-12 w-full sm:w-auto cursor-pointer min-w-[7rem]">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddIngredient}
+              disabled={processing || !newItem.name || !newItem.current_stock}
+              className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black border-none rounded-xl h-11 md:h-12 w-full sm:w-auto cursor-pointer shadow-md transition active:scale-[0.98] min-w-[9rem]"
             >
               {processing ? (
                 <Loader2 className="size-4 animate-spin mx-auto" />

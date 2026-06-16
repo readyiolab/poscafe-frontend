@@ -36,6 +36,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { pageShell, pageHeader } from '@/lib/layout';
 import api, { LIST_ALL_PARAMS } from '../services/api';
 
 const OffersManagement = () => {
@@ -136,9 +137,9 @@ const OffersManagement = () => {
   const filteredOffers = offers.filter(o => o.title.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
-    <div className="space-y-6">
+    <div className={pageShell}>
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/40 shadow-sm">
+      <div className={pageHeader}>
         <div className="flex items-center gap-4">
           <div className="size-12 rounded-xl bg-amber-500 flex items-center justify-center text-zinc-950 shrink-0 shadow-md shadow-amber-500/10">
             <Tag className="size-6" />

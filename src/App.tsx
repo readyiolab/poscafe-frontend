@@ -17,6 +17,7 @@ const UserManagement = lazy(() => import('./pages/UserManagement'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Transactions = lazy(() => import('./pages/Transactions'));
 const OffersManagement = lazy(() => import('./pages/OffersManagement'));
+const LoyaltyManagement = lazy(() => import('./pages/LoyaltyManagement'));
 const POS = lazy(() => import('./pages/POS'));
 
 const Unauthorized = () => <div className="h-screen flex items-center justify-center font-light text-2xl tracking-tight text-slate-800">403 - Unauthorized Access</div>;
@@ -48,6 +49,7 @@ const App = () => {
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/transactions" element={<Transactions />} />
                   <Route path="/offers" element={<OffersManagement />} />
+                  <Route path="/loyalty" element={<LoyaltyManagement />} />
                 </Route>
 
                 {/* Admin Only Routes */}

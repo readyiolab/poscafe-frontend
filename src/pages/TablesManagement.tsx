@@ -42,6 +42,7 @@ import { io } from 'socket.io-client';
 import { Link } from 'react-router-dom';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { pageShell, pageHeader } from '@/lib/layout';
 
 const TablesManagement = () => {
   const [tables, setTables] = useState<any[]>([]);
@@ -50,6 +51,7 @@ const TablesManagement = () => {
   const [billData, setBillData] = useState<any>(null);
   const [fetchingBill, setFetchingBill] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [showingBillToCustomer, setShowingBillToCustomer] = useState(false);
   const [saving, setSaving] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState('bill');
@@ -120,6 +122,19 @@ const TablesManagement = () => {
       toast('Payment failed', 'error');
     } finally {
       setProcessingPayment(false);
+    }
+  };
+
+  const handleShowBillToCustomer = async () => {
+    if (!selectedTable) return;
+    try {
+      setShowingBillToCustomer(true);
+      await api.post('/billing/show-to-customer', { table_id: selectedTable.id });
+      toast('Bill is now visible on customer phone', 'success');
+    } catch (err: any) {
+      toast(err.response?.data?.message || 'Could not show bill', 'error');
+    } finally {
+      setShowingBillToCustomer(false);
     }
   };
 
@@ -196,10 +211,10 @@ const TablesManagement = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto pb-8">
+    <div className={pageShell}>
       {!selectedTable ? (
         <>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl border border-zinc-200/60 dark:border-zinc-800/40 p-4 md:p-6 shadow-sm">
+          <div className={pageHeader}>
             <div>
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-white">Tables</h1>
               <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-semibold mt-0.5">
@@ -228,7 +243,7 @@ const TablesManagement = () => {
           </div>
 
           {/* Grid layout */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 min-w-0">
             {filtered.map((table) => (
               <Card
                 key={table.id}
@@ -356,6 +371,15 @@ const TablesManagement = () => {
                       </div>
                     ) : (
                       <>
+                        <Button
+                          variant="outline"
+                          className="w-full h-12 rounded-xl text-white hover:bg-white/10 border-amber-400/40 text-amber-200 cursor-pointer font-bold"
+                          disabled={showingBillToCustomer || !billData?.grand_total}
+                          onClick={handleShowBillToCustomer}
+                        >
+                          {showingBillToCustomer ? <Loader2 className="size-4 animate-spin mr-2" /> : <Receipt className="size-4 mr-2" />}
+                          Show Bill to Customer
+                        </Button>
                         <div className="grid grid-cols-2 gap-3">
                           <Button
                             variant="outline"

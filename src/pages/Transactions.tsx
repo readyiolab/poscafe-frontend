@@ -24,6 +24,7 @@ import api from '../services/api';
 import { formatDate } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { pageShell, pageHeader } from '@/lib/layout';
 
 const Transactions = () => {
   const [logs, setLogs] = useState<any[]>([]);
@@ -83,9 +84,9 @@ const Transactions = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className={pageShell}>
       {/* Banner Area */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/40 shadow-sm">
+      <div className={pageHeader}>
         <div className="flex items-center gap-4">
           <div className="size-12 rounded-xl bg-amber-500 flex items-center justify-center text-zinc-950 shrink-0 shadow-md shadow-amber-500/10">
             <Activity className="size-6" />
@@ -96,8 +97,8 @@ const Transactions = () => {
           </div>
         </div>
 
-        <Tabs value={period} onValueChange={setPeriod} className="shrink-0">
-          <TabsList className="bg-zinc-100 dark:bg-zinc-955 rounded-xl p-1 h-11 border border-zinc-200/50 dark:border-zinc-800/30">
+        <Tabs value={period} onValueChange={setPeriod} className="shrink-0 w-full md:w-auto overflow-x-auto">
+          <TabsList className="bg-zinc-100 dark:bg-zinc-955 rounded-xl p-1 h-11 border border-zinc-200/50 dark:border-zinc-800/30 w-full md:w-auto inline-flex min-w-max">
             {periods.map((p) => (
               <TabsTrigger key={p.value} value={p.value} className="rounded-lg px-4 py-1.5 text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:text-amber-600 dark:data-[state=active]:text-amber-500 cursor-pointer">
                 {p.label}
@@ -108,7 +109,7 @@ const Transactions = () => {
       </div>
 
       {/* Summary Stat Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 min-w-0">
         <Card className="border border-zinc-200/60 dark:border-zinc-800/40 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm">
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-xs font-bold text-zinc-450 dark:text-zinc-500 uppercase tracking-wider">Total Sales Inflow</CardTitle>

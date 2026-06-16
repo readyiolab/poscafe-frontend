@@ -33,6 +33,7 @@ import {
 import api from '../services/api';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { pageShell, pageHeader, statGrid } from '@/lib/layout';
 
 const Analytics = () => {
   const [data, setData] = useState<any>(null);
@@ -79,9 +80,9 @@ const Analytics = () => {
     : null;
 
   return (
-    <div className="space-y-6">
+    <div className={pageShell}>
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/40 shadow-sm">
+      <div className={pageHeader}>
         <div className="flex items-center gap-4">
           <div className="size-12 rounded-xl bg-amber-500 flex items-center justify-center text-zinc-950 shrink-0 shadow-md shadow-amber-500/10">
             <Activity className="size-6" />
@@ -92,8 +93,8 @@ const Analytics = () => {
           </div>
         </div>
 
-        <Tabs value={period} onValueChange={setPeriod} className="shrink-0">
-          <TabsList className="bg-zinc-100 dark:bg-zinc-955 rounded-xl p-1 h-11 border border-zinc-200/50 dark:border-zinc-800/30">
+        <Tabs value={period} onValueChange={setPeriod} className="shrink-0 w-full md:w-auto overflow-x-auto">
+          <TabsList className="bg-zinc-100 dark:bg-zinc-955 rounded-xl p-1 h-11 border border-zinc-200/50 dark:border-zinc-800/30 w-full md:w-auto inline-flex min-w-max">
             {periods.map((p) => (
               <TabsTrigger key={p.value} value={p.value} className="rounded-lg px-4 py-1.5 text-xs font-bold transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:text-amber-600 dark:data-[state=active]:text-amber-500 cursor-pointer">
                 {p.label}
@@ -104,7 +105,7 @@ const Analytics = () => {
       </div>
 
       {/* Numerical metric summaries */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={statGrid}>
         <Card className="border border-zinc-200/60 dark:border-zinc-800/40 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm">
           <CardContent className="p-4">
             <p className="text-xs font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-wider">Revenue</p>
@@ -132,7 +133,7 @@ const Analytics = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-zinc-900 dark:bg-zinc-950 text-white rounded-2xl shadow-sm border border-zinc-850 relative overflow-hidden col-span-2 lg:col-span-1">
+        <Card className="bg-zinc-900 dark:bg-zinc-950 text-white rounded-2xl shadow-sm border border-zinc-850 relative overflow-hidden col-span-2 md:col-span-1 min-w-0">
           <div className="absolute top-0 right-0 w-20 h-20 bg-white/5 rounded-full -mr-10 -mt-10 blur-xl" />
           <CardContent className="p-4 relative z-10">
             <p className="text-xs text-amber-500 font-bold flex items-center gap-1 uppercase tracking-wider">
@@ -146,7 +147,7 @@ const Analytics = () => {
       </div>
 
       {/* Daily Sales Area Chart and Busy Hours Bar Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
         <Card className="border border-zinc-200/60 dark:border-zinc-800/40 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm">
           <CardHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-3">
             <CardTitle className="text-base font-extrabold text-zinc-900 dark:text-white">Daily Revenue Flow</CardTitle>
@@ -224,7 +225,7 @@ const Analytics = () => {
       </div>
 
       {/* Top items & stock consumption list */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
         <Card className="border border-zinc-200/60 dark:border-zinc-800/40 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm">
           <CardHeader className="border-b border-zinc-100 dark:border-zinc-800 pb-3">
             <CardTitle className="text-base font-extrabold text-zinc-900 dark:text-white flex items-center gap-2">

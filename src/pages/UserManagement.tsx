@@ -35,6 +35,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import api from '../services/api';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { pageShell, pageHeader, tableWrap } from '@/lib/layout';
 
 const UserManagement = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -126,8 +127,8 @@ const UserManagement = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/40 shadow-sm">
+    <div className={pageShell}>
+      <div className={pageHeader}>
         <div className="flex items-center gap-4">
           <div className="size-12 rounded-xl bg-amber-500 flex items-center justify-center text-zinc-955 shrink-0 shadow-md shadow-amber-500/10">
             <UsersIcon className="size-6" />
@@ -146,7 +147,7 @@ const UserManagement = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 min-w-0">
         <Card className="border border-zinc-200/60 dark:border-zinc-800/40 bg-white/70 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-xs font-bold text-zinc-450 dark:text-zinc-550 uppercase tracking-wider">Administrators</CardTitle>
@@ -206,7 +207,7 @@ const UserManagement = () => {
           </Badge>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className={tableWrap}>
             <Table>
               <TableHeader className="bg-zinc-50/50 dark:bg-zinc-955/20 border-b border-zinc-155 dark:border-zinc-800/50">
                 <TableRow className="border-zinc-155 dark:border-zinc-800/50 hover:bg-transparent">

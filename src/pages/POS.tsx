@@ -72,6 +72,18 @@ const POS = () => {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
   const [processing, setProcessing] = useState(false);
   const [tablePickerExpanded, setTablePickerExpanded] = useState(true);
+  const [couponCode, setCouponCode] = useState('');
+  const [customerPoints, setCustomerPoints] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!customerPhone || !/^\d{10,15}$/.test(customerPhone)) {
+      setCustomerPoints(null);
+      return;
+    }
+    api.get('/customers/profile', { params: { phone: customerPhone } })
+      .then((res) => setCustomerPoints(res.data?.data?.customer?.points_balance ?? null))
+      .catch(() => setCustomerPoints(null));
+  }, [customerPhone]);
 
   useEffect(() => {
     if (!selectedTable) {
@@ -132,6 +144,7 @@ const POS = () => {
         table_id: selectedTable?.id,
         customer_name: customerName || undefined,
         customer_phone: customerPhone || undefined,
+        coupon_code: couponCode || undefined,
         payment_method: paymentMethod,
         items: cart.map((item) => ({
           menu_item_id: item.id,
@@ -142,6 +155,8 @@ const POS = () => {
       const paid = res.data?.data?.payment?.total_paid ?? getTotal();
       setCartOpen(false);
       resetPOS();
+      setCouponCode('');
+      setCustomerPoints(null);
       toast(`Payment done! ₹${Number(paid).toFixed(0)} received ✅`, 'success');
 
       // Refresh dining tables floor status
@@ -255,6 +270,18 @@ const POS = () => {
                 />
               </div>
             </div>
+          </div>
+          {customerPoints !== null && (
+            <p className="text-xs font-bold text-amber-600">Customer points: {customerPoints}</p>
+          )}
+          <div className="space-y-1.5 shrink-0">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Loyalty coupon code</Label>
+            <Input
+              placeholder="Optional coupon code"
+              className="h-11 rounded-2xl border-zinc-200 dark:border-zinc-800 text-sm font-semibold uppercase"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+            />
           </div>
 
           {/* Cart items list (rendered inline to scroll with container) */}
@@ -427,7 +454,7 @@ const POS = () => {
   }
 
   return (
-    <div className="flex w-full h-[calc(100vh-3.5rem)] md:h-[calc(100vh-3rem)] overflow-hidden bg-zinc-50 dark:bg-zinc-950 p-3 gap-3">
+    <div className="flex w-full h-[calc(100vh-3.5rem)] md:h-[calc(100vh-3rem)] overflow-hidden bg-zinc-50 dark:bg-zinc-950 p-2 sm:p-3 gap-2 sm:gap-3 min-w-0">
       {/* Main product search and catalog container */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden gap-3">
         {/* Table Floor Statistics Header */}
@@ -468,7 +495,7 @@ const POS = () => {
               type="button"
               onClick={() => setActiveCategory(cat)}
               className={cn(
-                'shrink-0 px-4 py-2.5 rounded-xl font-black text-xs whitespace-nowrap active:scale-95 cursor-pointer border transition-all',
+                'shrink-0 px-4 py-2.5 min-h-11 rounded-xl font-black text-xs whitespace-nowrap active:scale-95 cursor-pointer border transition-all',
                 activeCategory === cat
                   ? 'bg-amber-500 text-zinc-955 border-amber-500 shadow-sm'
                   : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-650 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -492,7 +519,7 @@ const POS = () => {
 
         {/* Product grid — compact horizontal cards */}
         <ScrollArea className="flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 pb-24 md:pb-4 pr-1.5">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 pb-24 md:pb-4 pr-1.5 min-w-0">
             {filteredItems.map((item) => {
               const cartItem = cart.find((i) => i.id === item.id);
               const quantityInCart = cartItem ? cartItem.quantity : 0;
@@ -546,7 +573,7 @@ const POS = () => {
       </div>
 
       {/* Desktop Billing sidebar */}
-      <aside className="hidden md:flex w-80 lg:w-[330px] shrink-0 flex-col bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800/80 p-3 shadow-xs overflow-hidden">
+      <aside className="hidden md:flex w-[260px] lg:w-72 xl:w-[330px] shrink-0 flex-col bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800/80 p-3 shadow-xs overflow-hidden min-w-0">
         {/* Header */}
         <div className="flex items-center gap-2 pb-2.5 border-b border-zinc-150 dark:border-zinc-800/60 shrink-0">
           <ShoppingCart className="size-4 text-amber-500" />

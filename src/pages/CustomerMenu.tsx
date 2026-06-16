@@ -21,6 +21,7 @@ import {
   Sparkles,
   Zap,
   QrCode,
+  ChefHat,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +31,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import api, { API_ORIGIN, LIST_ALL_PARAMS, SOCKET_ORIGIN } from '../services/api';
 import { io } from 'socket.io-client';
 import { toast } from '@/lib/toast';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { customerShell, menuItemGrid } from '@/lib/layout';
+import { CustomerLoyaltyPanel, OrderTrackingCard } from '@/components/customer/CustomerLoyaltyPanel';
+import type { CustomerBillStatus } from '@/components/customer/CustomerBillPanel';
+import { CustomerBottomNav, type CustomerTab } from '@/components/customer/CustomerBottomNav';
+import { CustomerBillPage } from '@/components/customer/CustomerBillPage';
 import {
   Sheet,
   SheetContent,
@@ -261,6 +268,70 @@ const CustomerMenu = () => {
   const [phoneInput, setPhoneInput] = useState('');
   const [savingPhone, setSavingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState('');
+  const [profile, setProfile] = useState<any>(null);
+  const [rewards, setRewards] = useState<any[]>([]);
+  const [loyaltySubView, setLoyaltySubView] = useState<'rewards' | 'history'>('rewards');
+  const [customerTab, setCustomerTab] = useState<CustomerTab>('menu');
+  const [sessionOrders, setSessionOrders] = useState<any[]>([]);
+  const [orderStatusFlash, setOrderStatusFlash] = useState<Record<number, number>>({});
+  const [redeeming, setRedeeming] = useState<number | null>(null);
+  const [serviceLoading, setServiceLoading] = useState<string | null>(null);
+  const [waiterCooldown, setWaiterCooldown] = useState(false);
+  const [billStatus, setBillStatus] = useState<CustomerBillStatus | null>(null);
+  const [billStatusLoading, setBillStatusLoading] = useState(false);
+  const [requestingBill, setRequestingBill] = useState(false);
+  const [settingPreference, setSettingPreference] = useState(false);
+  const [cartSheetOpen, setCartSheetOpen] = useState(false);
+  const [categoriesExpanded, setCategoriesExpanded] = useState(true);
+  const { isTablet, isDesktop, isMobile } = useBreakpoint();
+
+  const fetchBillStatus = useCallback(async () => {
+    if (!tableToken) return;
+    try {
+      setBillStatusLoading(true);
+      const res = await api.get('/billing/customer-status', { params: { table_token: tableToken } });
+      setBillStatus(res.data.data);
+    } catch {
+      /* optional */
+    } finally {
+      setBillStatusLoading(false);
+    }
+  }, [tableToken]);
+
+  const handleCategorySelect = useCallback((name: string) => {
+    setActiveCategory(name);
+    setCustomerTab('menu');
+    setCartSheetOpen(false);
+    if (isMobile) setCategoriesExpanded(false);
+    (document.activeElement as HTMLElement | null)?.blur?.();
+  }, [isMobile]);
+
+  const handleMenuAddToCart = useCallback((item: Parameters<typeof addToCart>[0]) => {
+    addToCart(item);
+    setCartSheetOpen(false);
+  }, [addToCart]);
+
+  const handleMenuRemoveFromCart = useCallback((id: number) => {
+    removeFromCart(id);
+    setCartSheetOpen(false);
+  }, [removeFromCart]);
+
+  const handleLoyaltySubViewChange = useCallback((view: 'rewards' | 'history') => {
+    setLoyaltySubView(view);
+  }, []);
+
+  const fetchProfile = async (phone: string) => {
+    try {
+      const [profileRes, rewardsRes] = await Promise.all([
+        api.get('/customers/profile', { params: { phone } }),
+        api.get('/loyalty/rewards'),
+      ]);
+      setProfile(profileRes.data.data);
+      setRewards(rewardsRes.data.data || []);
+    } catch {
+      /* profile optional */
+    }
+  };
 
   const pricedCartItems = useMemo(() => {
     return getPricedCartItems(cart, menuItems, offers);
@@ -268,6 +339,13 @@ const CustomerMenu = () => {
 
   const displayCartTotal = useMemo(() => {
     return pricedCartItems.reduce((acc, item) => acc + item.displayTotal, 0);
+  }, [pricedCartItems]);
+
+  const cartCalories = useMemo(() => {
+    return pricedCartItems.reduce((acc, item) => {
+      const kcal = Number(item.calories) || 0;
+      return acc + kcal * (item.quantity || 1);
+    }, 0);
   }, [pricedCartItems]);
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
@@ -285,6 +363,7 @@ const CustomerMenu = () => {
       await api.post('/customers', { phone });
       localStorage.setItem('customer_phone', phone);
       setCustomerPhone(phone);
+      await fetchProfile(phone);
       toast('Welcome to House Cafe!', 'success');
     } catch (err: any) {
       console.error('Failed to save phone', err);
@@ -344,25 +423,120 @@ const CustomerMenu = () => {
   }, [tableToken]);
 
   useEffect(() => {
+    if (customerPhone) fetchProfile(customerPhone);
+  }, [customerPhone]);
+
+  useEffect(() => {
+    if (tableToken && tableDetails?.id) fetchBillStatus();
+  }, [tableToken, tableDetails?.id, fetchBillStatus]);
+
+  const notifyOrderStatus = useCallback((order: any, previousStatus?: string) => {
+    if (!order?.status || order.status === previousStatus || !previousStatus) return;
+    const messages: Record<string, string> = {
+      Pending: 'Order received by kitchen!',
+      Preparing: 'Your food is cooking now!',
+      Ready: 'Your order is ready!',
+      Completed: 'Order served — enjoy your meal!',
+    };
+    const msg = messages[order.status];
+    if (msg) toast(msg, 'info');
+    setOrderStatusFlash((prev) => ({ ...prev, [order.id]: Date.now() }));
+    if (order.status !== 'Pending') setCustomerTab('orders');
+  }, []);
+
+  useEffect(() => {
     if (!tableDetails?.id) return;
 
     const socket = io(SOCKET_ORIGIN, { transports: ['websocket', 'polling'] });
+    socket.emit('join_table', tableDetails.id);
 
     socket.on('table_status_updated', (data) => {
       if (data && Number(data.table_id) === Number(tableDetails.id) && data.status === 'available') {
         localStorage.removeItem('customer_phone');
+        localStorage.removeItem('customer_session_orders');
         clearCart();
         setCustomerPhone('');
         setPhoneInput('');
         setOrderSuccess(false);
+        setSessionOrders([]);
+        setOrderStatusFlash({});
+        setProfile(null);
+        setBillStatus(null);
         toast('Your session has ended. Thank you! 🙏', 'info');
       }
     });
 
+    socket.on('order_status_updated', (order) => {
+      if (!order || Number(order.table_id) !== Number(tableDetails.id)) return;
+      let previousStatus: string | undefined;
+      setSessionOrders((prev) => {
+        const existing = prev.find((o) => o.id === order.id);
+        previousStatus = existing?.status;
+        const next = existing
+          ? prev.map((o) => (o.id === order.id ? {
+              ...o,
+              status: order.status,
+              created_at: order.created_at || o.created_at,
+              preparing_at: order.preparing_at || o.preparing_at,
+              ready_at: order.ready_at || o.ready_at,
+              completed_at: order.completed_at || o.completed_at,
+            } : o))
+          : [...prev, {
+              id: order.id,
+              status: order.status,
+              table_id: order.table_id,
+              created_at: order.created_at,
+              preparing_at: order.preparing_at,
+              ready_at: order.ready_at,
+              completed_at: order.completed_at,
+            }];
+        sessionStorage.setItem('customer_session_orders', JSON.stringify(next));
+        return next;
+      });
+      notifyOrderStatus(order, previousStatus);
+      fetchBillStatus();
+    });
+
+    socket.on('order_placed', (data) => {
+      if (!data || Number(data.table_id) !== Number(tableDetails.id)) return;
+      fetchBillStatus();
+    });
+
+    socket.on('bill_request_updated', (data) => {
+      if (data && Number(data.table_id) === Number(tableDetails.id)) {
+        setBillStatus(data);
+      }
+    });
+
+    socket.on('customer_bill_shown', (data) => {
+      if (data && Number(data.table_id) === Number(tableDetails.id)) {
+        setBillStatus(data);
+        setCustomerTab('bill');
+      }
+    });
+
+    socket.on('customer_bill_closed', (data) => {
+      if (data && Number(data.table_id) === Number(tableDetails.id)) {
+        setBillStatus(null);
+        fetchBillStatus();
+      }
+    });
+
+    socket.on('customer_points_updated', () => {
+      if (customerPhone) fetchProfile(customerPhone);
+    });
+
+    const stored = sessionStorage.getItem('customer_session_orders');
+    if (stored) {
+      try {
+        setSessionOrders(JSON.parse(stored));
+      } catch { /* ignore */ }
+    }
+
     return () => {
       socket.disconnect();
     };
-  }, [tableDetails?.id, clearCart]);
+  }, [tableDetails?.id, clearCart, customerPhone, fetchBillStatus, notifyOrderStatus]);
 
   const handlePlaceOrder = async () => {
     if (!tableToken || !tableDetails) {
@@ -374,21 +548,101 @@ const CustomerMenu = () => {
       setPlacingOrder(true);
       const orderData = {
         table_token: tableToken,
+        customer_phone: customerPhone || undefined,
         items: cart.map(item => ({
           menu_item_id: item.id,
           quantity: item.quantity
         }))
       };
 
-      await api.post('/orders', orderData);
+      const res = await api.post('/orders', orderData);
+      const newOrder = res.data?.data;
+      if (newOrder?.id) {
+        setSessionOrders((prev) => {
+          const next = [...prev, {
+            id: newOrder.id,
+            status: newOrder.status || 'Pending',
+            table_id: tableDetails.id,
+            created_at: newOrder.created_at || new Date().toISOString(),
+            preparing_at: newOrder.preparing_at,
+            ready_at: newOrder.ready_at,
+            completed_at: newOrder.completed_at,
+          }];
+          sessionStorage.setItem('customer_session_orders', JSON.stringify(next));
+          return next;
+        });
+        setOrderStatusFlash((prev) => ({ ...prev, [newOrder.id]: Date.now() }));
+        setCustomerTab('orders');
+        fetchBillStatus();
+      }
       setOrderSuccess(true);
       clearCart();
+      setCartSheetOpen(false);
       toast('Order sent to kitchen!', 'success');
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Order failed. Please try again.';
       toast(msg, 'error');
     } finally {
       setPlacingOrder(false);
+    }
+  };
+
+  const handleServiceRequest = async (type: 'waiter') => {
+    if (!tableToken) return;
+    try {
+      setServiceLoading(type);
+      await api.post('/loyalty/service-request', { table_token: tableToken, type });
+      toast('Waiter has been notified!', 'success');
+      setWaiterCooldown(true);
+      setTimeout(() => setWaiterCooldown(false), 120000);
+    } catch (err: any) {
+      toast(err.response?.data?.message || 'Could not send request', 'error');
+    } finally {
+      setServiceLoading(null);
+    }
+  };
+
+  const handleRequestBill = async () => {
+    if (!tableToken) return;
+    try {
+      setRequestingBill(true);
+      const res = await api.post('/billing/request', { table_token: tableToken });
+      setBillStatus(res.data.data);
+      toast('Bill request sent!', 'success');
+    } catch (err: any) {
+      toast(err.response?.data?.message || 'Could not request bill', 'error');
+    } finally {
+      setRequestingBill(false);
+    }
+  };
+
+  const handleSetPaymentPreference = async (method: 'cash' | 'upi') => {
+    if (!tableToken) return;
+    try {
+      setSettingPreference(true);
+      const res = await api.post('/billing/payment-preference', { table_token: tableToken, method });
+      setBillStatus(res.data.data);
+      toast(`You chose ${method === 'cash' ? 'Cash' : 'UPI'}`, 'success');
+    } catch (err: any) {
+      toast(err.response?.data?.message || 'Could not save preference', 'error');
+    } finally {
+      setSettingPreference(false);
+    }
+  };
+
+  const handleRedeem = async (rewardId: number) => {
+    if (!customerPhone) return;
+    try {
+      setRedeeming(rewardId);
+      const res = await api.post('/loyalty/redeem', { phone: customerPhone, reward_id: rewardId });
+      toast(`Coupon ${res.data.data.code} — use within ${res.data.data.valid_days} days!`, 'success');
+      await fetchProfile(customerPhone);
+      setLoyaltySubView('rewards');
+      setCustomerTab('points');
+    } catch (err: any) {
+      toast(err.response?.data?.message || 'Could not redeem', 'error');
+    } finally {
+      setRedeeming(null);
     }
   };
 
@@ -400,6 +654,7 @@ const CustomerMenu = () => {
         addToCart(item);
       }
     });
+    setCartSheetOpen(false);
   }, [addToCart, menuItems]);
 
   const filteredItems = useMemo(() => {
@@ -417,6 +672,18 @@ const CustomerMenu = () => {
         (item.description && String(item.description).toLowerCase().includes(q))
     );
   }, [activeCategory, menuItems, searchQuery]);
+
+  const activeOrderCount = useMemo(
+    () => sessionOrders.filter((o) => o.status !== 'Completed' && o.status !== 'Cancelled').length,
+    [sessionOrders]
+  );
+
+  const tabTitle: Record<CustomerTab, string> = {
+    menu: 'What would you like today? 🍔',
+    orders: 'Track your order',
+    points: 'Your points & rewards',
+    bill: 'Bill & payment',
+  };
 
   if (!tableToken || tableError) return (
     <div className="relative min-h-dvh flex flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-amber-50 via-stone-50 to-amber-100/80 px-8 text-center">
@@ -542,83 +809,104 @@ const CustomerMenu = () => {
   );
 
   return (
-    <div className="w-full min-h-dvh bg-stone-100 flex justify-center items-center">
-      <div className="relative w-full max-w-md h-dvh overflow-hidden bg-gradient-to-b from-amber-50/90 via-stone-50 to-amber-100/50 shadow-2xl border-x border-stone-200/50 flex flex-col">
-        
-        {/* SCROLLABLE MAIN CONTENT AREA */}
-        <div className={cn(
-          "flex-1 overflow-y-auto no-scrollbar transition-all duration-300",
-          cartCount > 0 ? "pb-24" : "pb-6"
-        )}>
-          <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(251,191,36,0.18),transparent_50%),radial-gradient(ellipse_80%_50%_at_100%_50%,rgba(214,211,209,0.35),transparent_45%)]" />
-          <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.35] bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23787169%22%20fill-opacity%3D%220.08%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')]" />
-          <header className="sticky top-0 z-30 border-b border-stone-200/40 bg-stone-50/90 backdrop-blur-md shadow-sm">
-            <div className="mx-auto flex w-full flex-col gap-3.5 px-4 pb-3.5 pt-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-3">
-                  <CafeLogoMark size="sm" className="shadow-md" aria-hidden />
+    <div className="w-full min-h-dvh bg-stone-100 flex justify-center items-stretch overflow-x-hidden">
+      <div className={cn(
+        'relative w-full overflow-x-hidden bg-gradient-to-b from-amber-50/90 via-stone-50 to-amber-100/50 shadow-2xl border-x border-stone-200/50 flex flex-col min-h-dvh max-h-dvh',
+        customerShell(isTablet, isDesktop)
+      )}>
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(251,191,36,0.18),transparent_50%),radial-gradient(ellipse_80%_50%_at_100%_50%,rgba(214,211,209,0.35),transparent_45%)]" />
+        <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.35] bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23787169%22%20fill-opacity%3D%220.08%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')]" />
 
-                  <div className="min-w-0 pt-0.5">
-                    <p className="mb-0.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-800/90">
-                      Table {tableDetails?.table_number || '...'} • Welcome! 🙏
-                    </p>
-                    <h1 className="text-lg font-bold tracking-tight text-stone-950">
-                      What would you like today? 🍔
-                    </h1>
-                  </div>
-                </div>
-                <div className="flex h-11 min-w-[2.75rem] items-center justify-center rounded-2xl bg-gradient-to-br from-amber-600 to-amber-800 px-3 text-sm font-semibold text-white shadow-md shadow-amber-900/20 ring-1 ring-white/20">
-                  {tableDetails?.table_number || '...'}
+        <header className="shrink-0 z-30 border-b border-stone-200/40 bg-stone-50/90 backdrop-blur-md shadow-sm">
+          <div className="mx-auto flex w-full flex-col gap-3 px-4 pb-3 pt-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <CafeLogoMark size="sm" className="shadow-md" aria-hidden />
+                <div className="min-w-0 pt-0.5">
+                  <p className="mb-0.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-800/90">
+                    Table {tableDetails?.table_number || '...'} • Welcome! 🙏
+                  </p>
+                  <h1 className="text-lg font-bold tracking-tight text-stone-950 leading-snug">
+                    {tabTitle[customerTab]}
+                  </h1>
                 </div>
               </div>
-
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" aria-hidden />
-                <Input
-                  type="search"
-                  placeholder="Search for tasty food... 🔍"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-11 rounded-2xl border-stone-200/80 bg-white/90 pl-11 pr-4 text-xs shadow-inner shadow-stone-900/5 placeholder:text-stone-400 focus-visible:border-amber-400 focus-visible:ring-amber-400/20 transition-all"
-                  autoComplete="off"
-                />
-              </div>
-
-              <div className="relative -mx-1">
-                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-stone-50 to-transparent" />
-                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-stone-50 to-transparent" />
-                <div className="flex gap-2 overflow-x-auto pb-0.5 pt-0.5 no-scrollbar">
-                  <button
-                    type="button"
-                    onClick={() => setActiveCategory('All')}
-                    className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${
-                      activeCategory === 'All'
-                        ? 'bg-gradient-to-r from-amber-700 to-amber-900 text-white shadow-md shadow-amber-900/20'
-                        : 'bg-white/80 text-stone-600 border border-stone-200/70 hover:bg-stone-50/80'
-                    }`}
-                  >
-                    All
-                  </button>
-                  {categories.map((cat) => (
-                    <button
-                      type="button"
-                      key={cat.id}
-                      onClick={() => setActiveCategory(cat.name)}
-                      className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${
-                        activeCategory === cat.name
-                          ? 'bg-gradient-to-r from-amber-700 to-amber-900 text-white shadow-md shadow-amber-900/20'
-                          : 'bg-white/80 text-stone-600 border border-stone-200/70 hover:bg-stone-50/80'
-                      }`}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex h-11 min-w-[2.75rem] items-center justify-center rounded-2xl bg-gradient-to-br from-amber-600 to-amber-800 px-3 text-sm font-semibold text-white shadow-md shadow-amber-900/20 ring-1 ring-white/20">
+                {tableDetails?.table_number || '...'}
               </div>
             </div>
-          </header>
 
-          {offers.length > 0 && (
+            {customerTab === 'menu' && (
+              <>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" aria-hidden />
+                  <Input
+                    type="search"
+                    placeholder="Search for tasty food... 🔍"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-11 rounded-2xl border-stone-200/80 bg-white/90 pl-11 pr-4 text-xs shadow-inner shadow-stone-900/5 placeholder:text-stone-400 focus-visible:border-amber-400 focus-visible:ring-amber-400/20 transition-all"
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="relative -mx-1">
+                  {!categoriesExpanded && isMobile ? (
+                    <button
+                      type="button"
+                      onClick={() => setCategoriesExpanded(true)}
+                      className="flex w-full items-center justify-between rounded-2xl border border-stone-200/80 bg-white/90 px-4 py-2.5 text-left shadow-sm cursor-pointer"
+                    >
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Category</span>
+                      <span className="text-xs font-bold text-stone-900">{activeCategory}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Change</span>
+                    </button>
+                  ) : (
+                    <>
+                      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-stone-50 to-transparent" />
+                      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-stone-50 to-transparent" />
+                      <div className="flex gap-2 overflow-x-auto pb-0.5 pt-0.5 no-scrollbar">
+                        <button
+                          type="button"
+                          onClick={() => handleCategorySelect('All')}
+                          className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${
+                            activeCategory === 'All'
+                              ? 'bg-gradient-to-r from-amber-700 to-amber-900 text-white shadow-md shadow-amber-900/20'
+                              : 'bg-white/80 text-stone-600 border border-stone-200/70 hover:bg-stone-50/80'
+                          }`}
+                        >
+                          All
+                        </button>
+                        {categories.map((cat) => (
+                          <button
+                            type="button"
+                            key={cat.id}
+                            onClick={() => handleCategorySelect(cat.name)}
+                            className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${
+                              activeCategory === cat.name
+                                ? 'bg-gradient-to-r from-amber-700 to-amber-900 text-white shadow-md shadow-amber-900/20'
+                                : 'bg-white/80 text-stone-600 border border-stone-200/70 hover:bg-stone-50/80'
+                            }`}
+                          >
+                            {cat.name}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </header>
+
+        <main className={cn(
+          'flex-1 min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar',
+          cartCount > 0 ? 'pb-28' : 'pb-4'
+        )}>
+          {customerTab === 'menu' && (
+            <>
+              {offers.length > 0 && (
             <section className="px-4 pt-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h2 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-stone-800">
@@ -693,7 +981,7 @@ const CustomerMenu = () => {
             </section>
           )}
 
-          <div className="space-y-3 px-4 pt-4 pb-2">
+              <div className={cn('space-y-3 px-4 pt-4 pb-2', menuItemGrid)}>
             {filteredItems.map((item) => {
               const cartItem = cart.find(i => i.id === item.id);
               return (
@@ -725,6 +1013,12 @@ const CustomerMenu = () => {
                             </span>
                           </>
                         ) : null}
+                        {item.calories ? (
+                          <>
+                            <span className="text-stone-300">·</span>
+                            <span className="text-[9px] font-semibold text-stone-500">{item.calories} kcal</span>
+                          </>
+                        ) : null}
                       </div>
 
                       <div className="pt-0.5">
@@ -732,7 +1026,7 @@ const CustomerMenu = () => {
                           <div className="flex w-fit items-center rounded-xl bg-stone-900 p-0.5 shadow-sm animate-in fade-in">
                             <button
                               type="button"
-                              onClick={() => removeFromCart(item.id)}
+                              onClick={() => handleMenuRemoveFromCart(item.id)}
                               className="flex h-8 w-8 items-center justify-center rounded-lg text-white/90 transition hover:bg-white/10 active:scale-90"
                               aria-label="Decrease quantity"
                             >
@@ -743,7 +1037,7 @@ const CustomerMenu = () => {
                             </span>
                             <button
                               type="button"
-                              onClick={() => addToCart(item)}
+                              onClick={() => handleMenuAddToCart(item)}
                               className="flex h-8 w-8 items-center justify-center rounded-lg text-white transition hover:bg-white/10 active:scale-90"
                               aria-label="Increase quantity"
                             >
@@ -753,7 +1047,7 @@ const CustomerMenu = () => {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => addToCart(item)}
+                            onClick={() => handleMenuAddToCart(item)}
                             disabled={item.status === 'sold_out'}
                             className="h-8 min-w-[84px] rounded-xl bg-gradient-to-r from-amber-600 to-amber-800 px-4 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 cursor-pointer hover:from-amber-700 hover:to-amber-900"
                           >
@@ -809,7 +1103,47 @@ const CustomerMenu = () => {
                 ) : null}
               </div>
             )}
-          </div>
+              </div>
+            </>
+          )}
+
+          {customerTab === 'orders' && (
+            activeOrderCount > 0 ? (
+              <OrderTrackingCard orders={sessionOrders} statusFlash={orderStatusFlash} />
+            ) : (
+              <div className="px-4 py-16 text-center">
+                <ChefHat className="size-12 mx-auto text-stone-300 mb-3" />
+                <p className="text-sm font-bold text-stone-700">No active orders</p>
+                <p className="text-xs text-stone-500 mt-1">Place an order from the Menu tab to track it here.</p>
+              </div>
+            )
+          )}
+
+          {customerTab === 'points' && (
+            <CustomerLoyaltyPanel
+              profile={profile}
+              rewards={rewards}
+              redeeming={redeeming}
+              onRedeem={handleRedeem}
+              view={loyaltySubView}
+              onViewChange={handleLoyaltySubViewChange}
+              pageMode
+            />
+          )}
+
+          {customerTab === 'bill' && (
+            <CustomerBillPage
+              status={billStatus}
+              loading={billStatusLoading}
+              requesting={requestingBill}
+              settingPreference={settingPreference}
+              waiterCooldown={waiterCooldown}
+              waiterLoading={serviceLoading === 'waiter'}
+              onWaiter={() => handleServiceRequest('waiter')}
+              onRequestBill={handleRequestBill}
+              onSetPreference={handleSetPaymentPreference}
+            />
+          )}
 
           {loadError ? (
             <div className="px-4 pb-4 pt-6">
@@ -818,16 +1152,23 @@ const CustomerMenu = () => {
               </div>
             </div>
           ) : null}
-        </div>
+        </main>
+
+        <CustomerBottomNav
+          active={customerTab}
+          onChange={setCustomerTab}
+          orderCount={activeOrderCount}
+          billReady={Boolean(billStatus?.bill_visible)}
+        />
 
         {/* FIXED APP-STYLE FLOATING CART TRIGGER BAR */}
-        <Sheet>
+        <Sheet open={cartSheetOpen} onOpenChange={setCartSheetOpen}>
           {cartCount > 0 && (
             <SheetTrigger asChild>
-              <div className="absolute bottom-5 left-4 right-4 z-50">
+              <div className="absolute bottom-[4.75rem] left-3 right-3 z-50 max-w-full sm:left-4 sm:right-4">
                 <button
                   type="button"
-                  className="group flex h-15 w-full items-center justify-between overflow-hidden rounded-2xl bg-gradient-to-r from-amber-700 via-amber-800 to-stone-900 px-5 shadow-2xl shadow-amber-950/35 ring-1 ring-white/10 transition active:scale-[0.99] cursor-pointer"
+                  className="group flex h-14 w-full max-w-full items-center justify-between overflow-hidden rounded-2xl bg-gradient-to-r from-amber-700 via-amber-800 to-stone-900 px-4 shadow-2xl shadow-amber-950/35 ring-1 ring-white/10 transition active:scale-[0.99] cursor-pointer"
                 >
                   <div className="flex flex-col text-left">
                     <span className="mb-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-200/90">
@@ -848,43 +1189,45 @@ const CustomerMenu = () => {
 
           <SheetContent
             side="bottom"
-            className="mx-auto flex h-[85vh] max-h-[85vh] w-full max-w-md flex-col rounded-t-[2.5rem] border-x border-t border-stone-200/60 bg-gradient-to-b from-stone-50 to-white px-0 shadow-2xl transition-all duration-300 left-0 min-[448px]:left-1/2 min-[448px]:-translate-x-1/2 bottom-0"
+            showCloseButton
+            className="inset-x-0 mx-auto flex h-[min(88dvh,88vh)] max-h-[min(88dvh,88vh)] w-full max-w-lg flex-col gap-0 overflow-hidden rounded-t-[1.75rem] border-x border-t border-stone-200/60 bg-gradient-to-b from-stone-50 to-white p-0 shadow-2xl pb-[env(safe-area-inset-bottom,0px)]"
           >
-            <SheetHeader className="flex flex-row items-center justify-between border-b border-stone-200/80 px-6 py-3.5">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] font-semibold uppercase tracking-[0.35em] text-stone-500">
+            <SheetHeader className="shrink-0 flex flex-row items-start justify-between gap-2 border-b border-stone-200/80 px-4 py-3 pr-12 sm:px-5">
+              <div className="min-w-0 flex-1">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-stone-500">
                   Plate Review
                 </span>
-                <SheetTitle className="text-base font-bold tracking-tight text-stone-900">
+                <SheetTitle className="text-base font-bold tracking-tight text-stone-900 truncate">
                   Review Your Order
                 </SheetTitle>
               </div>
-              <div className="flex items-center gap-1.5 rounded-xl border border-amber-200/60 bg-amber-50/90 px-3 py-1.5">
-                <Clock className="h-3.5 w-3.5 text-amber-800" />
-                <span className="text-[9px] font-bold uppercase tracking-wider text-amber-900/80">
-                  ~15 Min ⚡
+              <div className="flex shrink-0 items-center gap-1 rounded-lg border border-amber-200/60 bg-amber-50/90 px-2 py-1">
+                <Clock className="h-3 w-3 text-amber-800 shrink-0" />
+                <span className="text-[8px] font-bold uppercase tracking-wide text-amber-900/80 whitespace-nowrap">
+                  ~15 Min
                 </span>
               </div>
             </SheetHeader>
 
-            <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-6 py-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 sm:px-5">
               {pricedCartItems.map((item) => (
-                <div key={item.id} className="flex items-start justify-between gap-4 py-1.5 border-b border-stone-100 last:border-0">
-                  <div className="flex gap-3 min-w-0">
-                    <div className="w-8 h-8 bg-stone-100 rounded-lg flex items-center justify-center font-bold text-xs text-stone-900 border border-stone-200/50">
-                      {item.quantity}×
-                    </div>
-                    <div className="space-y-0.5 min-w-0">
-                      <h4 className="font-bold text-xs text-stone-800 tracking-tight truncate leading-tight">{item.name}</h4>
-                      <p className="text-[9px] font-bold text-stone-400 uppercase tracking-wider">₹{item.displayPrice} per plate</p>
-                    </div>
+                <div
+                  key={item.id}
+                  className="flex items-center gap-2 border-b border-stone-100 py-3 last:border-0 min-w-0"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-stone-200/50 bg-stone-100 text-xs font-bold text-stone-900">
+                    {item.quantity}×
                   </div>
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <span className="font-bold text-sm text-stone-900 tracking-tight">₹{item.displayTotal}</span>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="truncate text-sm font-bold text-stone-800">{item.name}</h4>
+                    <p className="text-[10px] font-medium text-stone-400">₹{item.displayPrice} each</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span className="text-sm font-bold text-stone-900 whitespace-nowrap">₹{item.displayTotal}</span>
                     <button
                       type="button"
                       onClick={() => removeFromCart(item.id)}
-                      className="rounded-lg p-1 text-stone-300 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                      className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
                       aria-label={`Remove ${item.name}`}
                     >
                       <Trash2 className="h-4 w-4" strokeWidth={1.75} />
@@ -924,25 +1267,28 @@ const CustomerMenu = () => {
             </div>
 
             {!orderSuccess && cart.length > 0 && (
-              <SheetFooter className="gap-4 border-t border-stone-200/80 bg-white/95 p-5 backdrop-blur-sm">
-                <div className="flex w-full items-center justify-between">
-                  <div className="flex flex-col gap-0.5">
+              <SheetFooter className="shrink-0 gap-3 border-t border-stone-200/80 bg-white/95 p-4 backdrop-blur-sm sm:p-5">
+                <div className="flex w-full min-w-0 items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <span className="text-[9px] font-bold uppercase tracking-wider text-stone-400">
                       Subtotal
                     </span>
-                    <span className="text-2xl font-black tracking-tight text-stone-900">₹{displayCartTotal}</span>
+                    <span className="block text-2xl font-black tracking-tight text-stone-900">₹{displayCartTotal}</span>
+                    {cartCalories > 0 && (
+                      <span className="text-[10px] font-semibold text-stone-500">{cartCalories} kcal total</span>
+                    )}
                   </div>
-                  <div className="rounded-xl border border-amber-200/70 bg-amber-50 px-3 py-1.5 text-center text-[10px] font-bold text-amber-950">
-                    Table {tableDetails?.table_number || '...'}
+                  <div className="shrink-0 rounded-xl border border-amber-200/70 bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-950 whitespace-nowrap">
+                    T-{tableDetails?.table_number ?? '…'}
                   </div>
                 </div>
                 <Button
                   type="button"
                   onClick={handlePlaceOrder}
                   disabled={placingOrder}
-                  className="h-12 w-full rounded-2xl bg-gradient-to-r from-amber-700 to-amber-900 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-amber-900/20 transition hover:from-amber-600 hover:to-amber-800 disabled:opacity-70 cursor-pointer"
+                  className="h-12 w-full min-h-11 rounded-2xl bg-gradient-to-r from-amber-700 to-amber-900 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-amber-900/20 transition hover:from-amber-600 hover:to-amber-800 disabled:opacity-70 cursor-pointer"
                 >
-                  {placingOrder ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : 'Send to Kitchen! 🚀'}
+                  {placingOrder ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : 'Send to Kitchen'}
                 </Button>
               </SheetFooter>
             )}
