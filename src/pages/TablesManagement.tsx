@@ -45,6 +45,7 @@ import { cn } from '@/lib/utils';
 import { pageShell, pageHeader } from '@/lib/layout';
 
 const QUICK_TABLE_NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+const QUICK_CAPACITIES = [2, 3, 4, 5, 6, 7, 8, 10, 12];
 
 const TablesManagement = () => {
   const [tables, setTables] = useState<any[]>([]);
@@ -158,7 +159,11 @@ const TablesManagement = () => {
       toast('Enter a table number', 'error');
       return;
     }
-    const payload = { ...formData, table_number: tableNumber };
+    const payload = {
+      ...formData,
+      table_number: tableNumber,
+      capacity: Math.max(1, Number(formData.capacity) || 1),
+    };
     try {
       setSaving(true);
       const tableId = editingId ?? selectedTable?.id;
@@ -182,14 +187,16 @@ const TablesManagement = () => {
   };
 
   const handleDeleteTable = async () => {
-    if (!editingId || !window.confirm('Delete this table?')) return;
+    if (!editingId || !window.confirm(
+      'Delete this table permanently?\n\nPast completed orders for this table will also be removed from the system.'
+    )) return;
     try {
       await api.delete(`/tables/${editingId}`);
       toast('Table deleted', 'info');
       closeDetail();
       fetchTables();
-    } catch {
-      toast('Delete failed', 'error');
+    } catch (err: any) {
+      toast(err.response?.data?.message || 'Delete failed', 'error');
     }
   };
 
@@ -471,19 +478,42 @@ const TablesManagement = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Seat Capacity</Label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[2, 4, 6, 8].map((cap) => (
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Seat capacity</Label>
+                    <p className="text-[10px] text-zinc-400">Tap a quick size or type any number (e.g. 3, 7, 8)</p>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                      {QUICK_CAPACITIES.map((cap) => (
                         <Button
                           key={cap}
                           type="button"
-                          variant={formData.capacity === cap ? 'default' : 'outline'}
+                          variant={Number(formData.capacity) === cap ? 'default' : 'outline'}
                           onClick={() => setFormData({ ...formData, capacity: cap })}
-                          className="h-11 rounded-xl cursor-pointer"
+                          className={cn(
+                            'h-11 rounded-xl cursor-pointer font-bold',
+                            Number(formData.capacity) === cap && 'bg-amber-500 text-zinc-950 hover:bg-amber-400 border-none'
+                          )}
                         >
-                          {cap} Seats
+                          {cap}
                         </Button>
                       ))}
+                    </div>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={99}
+                        placeholder="Custom seats e.g. 7"
+                        value={formData.capacity}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            capacity: Math.max(1, parseInt(e.target.value, 10) || 1),
+                          })
+                        }
+                        className="h-11 rounded-xl pr-14"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400 uppercase">
+                        seats
+                      </span>
                     </div>
                   </div>
                   <Button className="w-full h-11 bg-amber-500 text-zinc-950 hover:bg-amber-400 font-bold border-none rounded-xl cursor-pointer" onClick={handleSaveTable} disabled={saving}>
@@ -538,20 +568,37 @@ const TablesManagement = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-zinc-550">Seat count</Label>
-              <div className="grid grid-cols-4 gap-2">
-                {[2, 4, 6, 8].map((cap) => (
+              <Label className="text-xs font-semibold uppercase tracking-wide text-zinc-550">Seat capacity</Label>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                {QUICK_CAPACITIES.map((cap) => (
                   <Button
                     key={cap}
                     type="button"
-                    variant={formData.capacity === cap ? 'default' : 'outline'}
+                    variant={Number(formData.capacity) === cap ? 'default' : 'outline'}
                     onClick={() => setFormData({ ...formData, capacity: cap })}
-                    className="h-11 rounded-xl cursor-pointer"
+                    className={cn(
+                      'h-11 rounded-xl cursor-pointer font-bold',
+                      Number(formData.capacity) === cap && 'bg-amber-500 text-zinc-950 hover:bg-amber-400 border-none'
+                    )}
                   >
                     {cap}
                   </Button>
                 ))}
               </div>
+              <Input
+                type="number"
+                min={1}
+                max={99}
+                placeholder="Custom e.g. 7"
+                value={formData.capacity}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    capacity: Math.max(1, parseInt(e.target.value, 10) || 1),
+                  })
+                }
+                className="h-11 rounded-xl"
+              />
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0 mt-4 border-t pt-4 border-zinc-200/20 dark:border-zinc-800/20">
